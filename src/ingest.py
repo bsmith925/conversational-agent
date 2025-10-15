@@ -10,7 +10,7 @@ from pathlib import Path
 # Move this into running on cloud-storage in production.
 # I'm thinking this makes sense as CRON/event-driven. Probably build a 'connector' approach 
 # So we can easily add/remove sources. For simplicity, I would manage it via Terraform/DynamoDB.
-DOCUMENTS_PATH = Path("documents/")
+DOCUMENTS_PATH = Path("pdfs/tudor/royal/")
 
 def split_text(text, chunk_size: int = 1000, chunk_overlap: int = 200) -> list[str]:
     """
@@ -33,7 +33,7 @@ def main():
     # create singleton instances that let me handle more intricate settings like Pools & Connection mgmt
     # Does @lru_cache make sense here.
     # It also let's us handle some exception handling more easily, maybe?
-    conn = psycopg.connect(dsn=settings.postgres_dsn) 
+    conn = psycopg.connect(settings.postgres_dsn)
     cur = conn.cursor()
         
     # Do I want to look at having executable SQL scripts in a dir for version control?
@@ -47,6 +47,7 @@ def main():
         id SERIAL PRIMARY KEY,
         content TEXT,
         embedding VECTOR(384)
+    );
     """
     )
     conn.commit()
@@ -64,6 +65,7 @@ def main():
     pdf_files = list(DOCUMENTS_PATH.glob("*.pdf"))
     
     for filepath in pdf_files:
+        # Note: I'm also not caring about the quality of output from pypdf right now wither.
         print(f"Processing {filepath.name} ...")
         reader = PdfReader(filepath)
         # TODO: less memory intensive. Really bad on massive PDFs.
@@ -81,17 +83,18 @@ def main():
         for content, embedding in zip(chunks, embeddings):
             cur.execute(
                 "INSERT INTO documents (content, embedding) VALUES (%s, %s)",
-                (content, np.array(embedding))
+                (content, embedding.tolist())
             )
-
-        print("Creating IVFFlat index...")
-        cur.execute(
-            "CREATE INDEX ON documents USING ivfflat (embedding vector_12_ops) WITH (lists = 100);"
-        )
         conn.commit()
-        cur.close()
-        conn.close()
-        print("\nIngestion complete.")
+
+    print("Creating IVFFlat index...")
+    cur.execute(
+        "CREATE INDEX ON documents USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);"
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("\nIngestion complete.")
 
 if __name__ == "__main__":
     main()
