@@ -9,7 +9,7 @@ dependencies = [
     "psycopg[binary]>=3.2.10",
     "pydantic>=2.12.2",
     "pydantic-settings>=2.11.0",
-    "pypdf2>=3.0.1",
+    "pypdf>=6.1.1",
     "sentence-transformers>=5.1.1",
     "torch==2.2.2", # TODO: update when I test on more modern machine. Intel Chip Mac can't go past 2.2.2
 ]
