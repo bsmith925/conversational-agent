@@ -16,3 +16,6 @@ pg_data/
 # IDE-specific files
 .vscode/
 .idea/
+
+# files
+pdfs/

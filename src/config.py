@@ -42,6 +42,7 @@ class Settings(BaseSettings):
             password=self.database_password,
             host=self.database_host,
             port=int(self.database_port),
+            path=self.database_name
 
         ).unicode_string() # stringify the URI from MultiHostURL
     

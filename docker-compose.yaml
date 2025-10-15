@@ -5,11 +5,12 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USERNAME=${DATASE_USERNAME:-user}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-password}
-      - POSTGRES_DATABASE=${DATABASE_NAME:-vectordb}
+      - POSTGRES_USER=${DATABASE_USERNAME:-user}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-password1230}
+      - POSTGRES_DB=${DATABASE_NAME:-vectordb}
     volumes:
       - pg_data:/var/lib/postgresql/data
+    # TODO: healthcheck
   
   redis:
     # TODO: change to redis-stack. Comes with a lot of useful features
