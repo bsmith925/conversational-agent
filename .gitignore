@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+
+# Docker persistent data
+pg_data/
+
+# IDE-specific files
+.vscode/
+.idea/
