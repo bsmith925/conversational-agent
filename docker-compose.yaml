@@ -1,0 +1,21 @@
+services:
+  postgres:
+  # going to use the ankane image since it has pgvector pre-installed
+    image: ankane/pgvector
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USERNAME=${DATASE_USERNAME:-user}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-password}
+      - POSTGRES_DATABASE=${DATABASE_NAME:-vectordb}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+  
+  redis:
+    # TODO: change to redis-stack. Comes with a lot of useful features
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+volumes:
+  pg_data:
