@@ -15,18 +15,34 @@ class Settings(BaseSettings):
     database_username: str = "user"
     database_password: str = "password"
     database_host: str = "localhost"
-    database_port: int = 5432 # do I need to add field validator to coerce to int?
+    database_port: int = 5432
     database_name: str = "vectordb"
 
     # Redis settings
     redis_host: str = "localhost"
     redis_port: int = 6379
+    redis_ttl: int = 3600
     # leaving redis_db to default as 0, especially considering cluster is always 0
 
     # LLM & Embedding Settings
     ollama_base_url: HttpUrl = "http://localhost:11434"
     llm_model: str = "llama3"
     embedding_model_name: str = "all-MiniLM-L6-v2"
+
+    openrouter_api_key: str = ""
+    
+    # RAG Settings
+    retrieval_similarity_threshold: float = 0.3
+    llm_max_tokens: int = 4096 # increased from 2k, was truncating. Need to handle truncations better..e.g. how claude UI says max convo context. Continue button?
+    enable_query_expansion: bool = False
+    rag_k: int = 3
+    chat_history_limit: int = 20
+    
+    # Logging
+    log_level: str = "INFO"
+    
+    # Database Safety - too much docker-compose down -v while iterating
+    allow_db_recreation: bool = False
 
     @property
     def postgres_dsn(self) -> str:
@@ -37,7 +53,7 @@ class Settings(BaseSettings):
         # won't need to specify driver if not using ORM that requires it like SQLAlchemy
         return PostgresDsn.build(
             scheme="postgresql",
-            # multiple hosts good for fragmented DBs to build many hosts
+            # hosts: multiple hosts good for fragmented DBs to build many hosts 
             username=self.database_username,
             password=self.database_password,
             host=self.database_host,

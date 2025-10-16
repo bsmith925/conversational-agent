@@ -12,10 +12,10 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    # Later support for artifacts
+    # Later support for artifacts (or references to them)
 
 class RedisChatMessageHistory:
-    """Manages chat history in Redis."""
+    """Manages chat history in Redis. Its sole responsibility is storing and retrieving ChatMessage objects."""
     def __init__(self, session_id: str, redis_client: redis.Redis, ttl: int = 3600) -> None:
         self.redis_client = redis_client
         self.session_id = session_id
@@ -30,34 +30,23 @@ class RedisChatMessageHistory:
 
     async def get_messages(self, limit: int = 20) -> List[ChatMessage]:
         """Retrieve messages from the history."""
-        raw_messages = await self.redis_client.lrange(self.key, 0, -1)
+        # Get the last `limit` messages. LRANGE key start stop. -limit to -1 gets the last N items.
+        raw_messages = await self.redis_client.lrange(self.key, -limit, -1)
         
         messages = []
         for raw_msg in raw_messages:
-            # If raw_msg is already a string (decode_responses=True)
-            if isinstance(raw_msg, str):
-                msg_dict = json.loads(raw_msg)
-            else:
-                # If raw_msg is bytes
-                msg_dict = json.loads(raw_msg.decode('utf-8'))
-            
+            # If raw_msg is already a string (decode_responses=True), no need to decode
+            msg_dict = json.loads(raw_msg)
             messages.append(ChatMessage.model_validate(msg_dict))
                 
         return messages
 
-    # I want this associated with a program, not here. And accepts list of messages
-    async def get_formatted_string(self) -> str:
-        """Get the chat history as a formatted string."""
-        messages = await self.get_messages()
-        
-        if not messages:
-            return ""
-        
-        return "\n".join([f"{msg.role}: {msg.content}" for msg in messages])
     
-    # Maybe end up storing the documents we did RAG on with the message?
-        
 
+    # Maybe end up storing the documents we did RAG on with the message?
+    #  add a field `retrieved_context: Optional[List[Dict]] = None`
+    #  to the ChatMessage model and store it with the assistant's message for traceability.
+        
     async def clear(self):
         """Clears the chat history for the session."""
         await self.redis_client.delete(self.key)

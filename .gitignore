@@ -19,3 +19,6 @@ pg_data/
 
 # files
 pdfs/
+
+# chainlit
+.chainlit
