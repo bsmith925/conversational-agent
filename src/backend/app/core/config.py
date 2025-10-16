@@ -9,11 +9,19 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        case_sensitive=False,
     )
+
+    # API Settings
+    api_title: str = "Conversational Agent API"
+    api_version: str = "1.0.0"
+    api_prefix: str = "/api/v1"
+    
+    # TODO: CORS here and use in main.py
 
     # Database (Postgres) settings
     database_username: str = "user"
-    database_password: str = "password"
+    database_password: str = "password1230"
     database_host: str = "localhost"
     database_port: int = 5432
     database_name: str = "vectordb"
@@ -21,6 +29,7 @@ class Settings(BaseSettings):
     # Redis settings
     redis_host: str = "localhost"
     redis_port: int = 6379
+    redis_db: int = 0
     redis_ttl: int = 3600
     # leaving redis_db to default as 0, especially considering cluster is always 0
 
@@ -62,4 +71,4 @@ class Settings(BaseSettings):
 
         ).unicode_string() # stringify the URI from MultiHostURL
     
-settings = Settings() #singleton we can import and avoid some ciruclar imports
+settings = Settings() # singleton we can import and avoid some ciruclar imports

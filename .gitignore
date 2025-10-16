@@ -22,3 +22,7 @@ pdfs/
 
 # chainlit
 .chainlit
+
+# .env
+.env
+
