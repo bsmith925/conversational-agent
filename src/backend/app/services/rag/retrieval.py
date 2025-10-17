@@ -1,6 +1,5 @@
-# src/backend/app/services/rag/retrieval.py
 from typing import List, Dict, Any
-import psycopg
+from psycopg import AsyncConnection
 from sentence_transformers import SentenceTransformer
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -18,6 +17,7 @@ class Retriever:
         self, 
         query: str,
         embedding_model: SentenceTransformer,
+        db_connection: AsyncConnection,
         k: int = 5,
         similarity_threshold: float = None
     ) -> List[Dict[str, Any]]:
@@ -28,50 +28,49 @@ class Retriever:
         logger.info(f"Retrieving documents for query: '{query[:100]}...'")
         
         try:
-            async with await psycopg.AsyncConnection.connect(settings.postgres_dsn) as aconn:
-                async with aconn.cursor() as acur:
-                    query_embedding = embedding_model.encode(
-                        query, 
-                        convert_to_tensor=False
-                    )
-                    embedding_list = query_embedding.tolist()
-                    embedding_str = f"[{','.join(map(str, embedding_list))}]"
-                    
-                    # Get 2*k candidates initially for filtering
-                    await acur.execute(
-                        """SELECT content, source_file, page_num, 
-                           1 - (embedding <=> %s::vector) as similarity
-                           FROM documents 
-                           ORDER BY embedding <=> %s::vector LIMIT %s""",
-                        (embedding_str, embedding_str, k * 2),
-                    )
-                    
-                    retrieved_docs = []
-                    async for row in acur:
-                        retrieved_docs.append({
-                            "content": row[0],
-                            "source": row[1],
-                            "page": row[2],
-                            "similarity": row[3]
-                        })
-                    
-                    # Filter by similarity threshold
-                    filtered_docs = [
-                        doc for doc in retrieved_docs 
-                        if doc.get("similarity", 0) > similarity_threshold
-                    ][:k]
-                    
-                    logger.info(
-                        f"Retrieved {len(filtered_docs)} documents "
-                        f"(threshold: {similarity_threshold})"
-                    )
-                    
-                    if filtered_docs:
-                        similarities = [doc['similarity'] for doc in filtered_docs]
-                        logger.info(f"Similarity scores: {[f'{s:.3f}' for s in similarities]}")
-                    
-                    return filtered_docs
-                    
+            async with db_connection.cursor() as acur:
+                query_embedding = embedding_model.encode(
+                    query, 
+                    convert_to_tensor=False
+                )
+                embedding_list = query_embedding.tolist()
+                embedding_str = f"[{','.join(map(str, embedding_list))}]"
+                
+                # Get 2*k candidates initially for filtering
+                await acur.execute(
+                    """SELECT content, source_file, page_num, 
+                       1 - (embedding <=> %s::vector) as similarity
+                       FROM documents 
+                       ORDER BY embedding <=> %s::vector LIMIT %s""",
+                    (embedding_str, embedding_str, k * 2),
+                )
+                
+                retrieved_docs = []
+                async for row in acur:
+                    retrieved_docs.append({
+                        "content": row[0],
+                        "source": row[1],
+                        "page": row[2],
+                        "similarity": row[3]
+                    })
+                
+                # Filter by similarity threshold
+                filtered_docs = [
+                    doc for doc in retrieved_docs 
+                    if doc.get("similarity", 0) > similarity_threshold
+                ][:k]
+                
+                logger.info(
+                    f"Retrieved {len(filtered_docs)} documents "
+                    f"(threshold: {similarity_threshold})"
+                )
+                
+                if filtered_docs:
+                    similarities = [doc['similarity'] for doc in filtered_docs]
+                    logger.info(f"Similarity scores: {[f'{s:.3f}' for s in similarities]}")
+                
+                return filtered_docs
+                
         except Exception as e:
             logger.error(f"Postgres retrieval failed: {e}", exc_info=True)
             return []

@@ -3,6 +3,7 @@ from fastapi import Depends
 import dspy
 from app.services.rag.service import RAGService
 from app.dependencies.vector_db import RetrieverDep, EmbeddingModel
+from app.dependencies.database import DatabaseConnection
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -18,10 +19,11 @@ dspy.settings.configure(lm=lm)
 
 def get_rag_service(
     retriever: RetrieverDep,
-    embedding_model: EmbeddingModel
+    embedding_model: EmbeddingModel,
+    db_connection: DatabaseConnection
 ) -> RAGService:
     """Dependency that provides a RAG service."""
-    return RAGService(retriever, embedding_model, k=settings.rag_k)
+    return RAGService(retriever, embedding_model, db_connection, k=settings.rag_k)
 
 
 # Type alias for dependency injection

@@ -1,10 +1,11 @@
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.services.cache import RedisChatMessageHistory
-from app.models.chat import ChatMessage, WSMessage
-from app.dependencies.cache import get_redis_client
-from app.dependencies.vector_db import get_retriever, get_embedding_model
-from app.dependencies.rag import get_rag_service
+from app.models.chat import ChatMessage
+from app.dependencies.websocket import ConnectionManagerDep
+from app.dependencies.cache import RedisClient
+from app.dependencies.rag import RAGDep
+from app.dependencies.chat import RAGChatService
+from app.api.routes.ws_utils import send_start, send_step, send_tokens, send_end, send_error
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -12,60 +13,18 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-# TODO: move this into a websocket dependency.
-class ConnectionManager:
-    """Manages WebSocket connections."""
-
-    def __init__(self):
-        self.active_connections: dict[str, WebSocket] = {}
-
-    async def connect(self, session_id: str, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections[session_id] = websocket
-        logger.info(f"WebSocket connected: {session_id}")
-
-    def disconnect(self, session_id: str):
-        if session_id in self.active_connections:
-            del self.active_connections[session_id]
-            logger.info(f"WebSocket disconnected: {session_id}")
-##
-    async def send_message(self, session_id: str, message: WSMessage):
-        if session_id in self.active_connections:
-            try:
-                await self.active_connections[session_id].send_text(
-                    message.model_dump_json()
-                )
-            except Exception as e:
-                logger.error(f"Error sending message to {session_id}: {e}")
-                raise
-
-# TODO: move with dep. 
-manager = ConnectionManager()
-
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
-    session_id: str
+    session_id: str,
+    manager: ConnectionManagerDep,
+    chat_service: RAGChatService
 ):
     """WebSocket endpoint for streaming chat responses - persistent connection."""
     await manager.connect(session_id, websocket)
 
-    # Initialize dependencies once for this connection
-    # TODO: move these to use Depends(Annotated[type, fnc])
-    redis_client = await get_redis_client()
-    embedding_model = get_embedding_model()
-    retriever = get_retriever()
-    rag_service = get_rag_service(retriever, embedding_model)
-
-    history_manager = RedisChatMessageHistory(
-        session_id=session_id,
-        redis_client=redis_client,
-        ttl=settings.redis_ttl
-    )
-
     try:
-        # Keeping websocket alive..still not sure I've done ws right
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
@@ -77,90 +36,44 @@ async def websocket_endpoint(
             logger.info(f"Received message from {session_id}: {user_message[:100]}")
 
             # Send start message
-            await manager.send_message(
-                session_id,
-                WSMessage(type="start", content="Processing...", session_id=session_id)
-            )
+            await send_start(manager, session_id)
 
             try:
-                # Get chat history
-                messages = await history_manager.get_messages(
-                    limit=settings.chat_history_limit
-                )
-                formatted_history = "\n".join(
-                    [f"{msg.role}: {msg.content}" for msg in messages]
-                )
-
-                logger.info(f"Chat history has {len(messages)} messages")
-
                 # Send step: Understanding query
-                await manager.send_message(
-                    session_id,
-                    WSMessage(
-                        type="step",
-                        content="Understanding your question...",
-                        step_name="query_understanding"
-                    )
+                await send_step(
+                    manager, 
+                    session_id, 
+                    "Understanding your question...", 
+                    "query_understanding"
                 )
 
-                # Process through RAG
-                result = await rag_service.process_query(
-                    question=user_message,
-                    chat_history=formatted_history
-                )
+                # Process through ChatService
+                result = await chat_service.process_message(user_message, session_id)
 
                 # Send step: Documents retrieved
-                await manager.send_message(
+                await send_step(
+                    manager,
                     session_id,
-                    WSMessage(
-                        type="step",
-                        content=f"Retrieved {len(result.retrieved_docs)} documents",
-                        step_name="retrieval"
-                    )
+                    f"Retrieved {len(result.retrieved_docs)} documents",
+                    "retrieval"
                 )
                 
-                await manager.send_message(
+                await send_step(
+                    manager,
                     session_id,
-                    WSMessage(
-                        type="step",
-                        content="Generating answer...",
-                        step_name="generation"
-                    )
+                    "Generating answer...",
+                    "generation"
                 )
                 
-                words = result.answer.split()
-                for i, word in enumerate(words):
-                    token = word if i == 0 else f" {word}"
-                    await manager.send_message(
-                        session_id,
-                        WSMessage(type="token", content=token)
-                    )
+                # Stream the response
+                await send_tokens(manager, session_id, result.answer)
                 
-                await manager.send_message(
+                # Send completion
+                await send_end(
+                    manager,
                     session_id,
-                    WSMessage(
-                        type="end",
-                        content=json.dumps({
-                            "retrieved_docs": [
-                                doc.model_dump() for doc in result.retrieved_docs
-                            ],
-                            "search_query": result.search_query
-                        }),
-                        session_id=session_id
-                    )
-                )
-                
-                await history_manager.add_message(
-                    ChatMessage(role="user", content=user_message)
-                )
-                await history_manager.add_message(
-                    ChatMessage(
-                        role="assistant",
-                        content=result.answer,
-                        retrieved_context=[
-                            doc.model_dump() for doc in result.retrieved_docs
-                        ]
-                    )
+                    [doc.model_dump() for doc in result.retrieved_docs],
+                    result.search_query
                 )
 
                 logger.info(f"Message processing complete for {session_id}")
@@ -170,19 +83,10 @@ async def websocket_endpoint(
                 error_content = f"An error occurred while processing your request: {str(e)}"
                 
                 # Send the error message to the client
-                await manager.send_message(
-                    session_id,
-                    WSMessage(
-                        type="error",
-                        content=error_content
-                    )
-                )
+                await send_error(manager, session_id, error_content)
                 
                 # Close the connection with an error code (1011 = Internal Error)
-                # makes the server's state more predictable.
                 await websocket.close(code=1011, reason="Internal Server Error during processing")
-                
-                # Break the loop since the connection will be closed
                 break
 
     except WebSocketDisconnect:
@@ -190,5 +94,4 @@ async def websocket_endpoint(
         manager.disconnect(session_id)
     except Exception as e:
         logger.error(f"WebSocket error for {session_id}: {e}", exc_info=True)
-        # Ensure disconnection if an error happens outside the inner loop
         manager.disconnect(session_id)

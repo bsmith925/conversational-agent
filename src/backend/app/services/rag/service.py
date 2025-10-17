@@ -1,7 +1,7 @@
-# src/backend/app/services/rag/service.py
 import asyncio
 from typing import List
 import dspy
+from psycopg import AsyncConnection
 from sentence_transformers import SentenceTransformer
 from app.services.rag.retrieval import Retriever
 from app.core.config import settings
@@ -91,10 +91,12 @@ class RAGService:
         self, 
         retriever: Retriever,
         embedding_model: SentenceTransformer,
+        db_connection: AsyncConnection,
         k: int = None
     ):
         self.retriever = retriever
         self.embedding_model = embedding_model
+        self.db_connection = db_connection
         self.k = k or settings.rag_k
         self.query_engine = QueryUnderstandingEngine()
         self.generate_answer = dspy.ChainOfThought(FinalAnswerSignature)
@@ -113,6 +115,7 @@ class RAGService:
         retrieved_docs = await self.retriever.retrieve_documents(
             search_query,
             self.embedding_model,
+            self.db_connection,
             k=self.k
         )
         
