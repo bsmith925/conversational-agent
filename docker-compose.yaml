@@ -10,13 +10,66 @@ services:
       - POSTGRES_DB=${DATABASE_NAME:-vectordb}
     volumes:
       - pg_data:/var/lib/postgresql/data
-    # TODO: healthcheck
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-user} -d ${DATABASE_NAME:-vectordb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   
   redis:
     # TODO: change to redis-stack. Comes with a lot of useful features
     image: redis:latest
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_USERNAME=${DATABASE_USERNAME:-user}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-password1230}
+      - DATABASE_NAME=${DATABASE_NAME:-vectordb}
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_TTL=${REDIS_TTL:-3600}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-openrouter/google/gemini-2.5-pro}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-all-MiniLM-L6-v2}
+      - RAG_K=${RAG_K:-3}
+      - RETRIEVAL_SIMILARITY_THRESHOLD=${RETRIEVAL_SIMILARITY_THRESHOLD:-0.3}
+      - CHAT_HISTORY_LIMIT=${CHAT_HISTORY_LIMIT:-20}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-4096}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: src/frontend/Dockerfile
+    ports:
+      - "8080:8000"
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - WS_URL=ws://backend:8000/ws
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   pg_data:

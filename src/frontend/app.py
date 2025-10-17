@@ -5,11 +5,12 @@ import json
 import asyncio
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
-# TODO: proper ws exception handling
 
-# TODO: move settings.py with these
-BACKEND_URL = "http://localhost:8000"
-WS_URL = "ws://localhost:8000/ws"
+from config import settings
+
+# Use settings from config
+BACKEND_URL = settings.backend_url
+WS_URL = settings.ws_url
 
 # TODO chainlid.md used as 'homepage'
 

@@ -3,26 +3,35 @@ name = "conversational-agent"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "chainlit>=2.8.3",
-    "dspy>=3.0.3",
+requires-python = ">=3.10, <3.11"
+dependencies = []
+
+[dependency-groups]
+backend = [
     "fastapi>=0.116.2",
-    "httpx>=0.28.1",
-    # "numpy>=2.3.4",
-    "numpy<2.0.0",
+    "uvicorn[standard]>=0.30.0",
+    "dspy>=3.0.3",
     "psycopg[binary,pool]>=3.2.10",
     "pydantic>=2.12.2",
     "pydantic-settings>=2.11.0",
-    "pymupdf>=1.26.5",
-    "pypdf>=6.1.1",
     "redis>=6.4.0",
     "sentence-transformers>=5.1.1",
-    "torch==2.2.2", # TODO: update when I test on more modern machine. Intel Chip Mac can't go past 2.2.2
+    "torch==2.2.2",
+    "numpy<2.0.0",
+]
+frontend = [
+    "chainlit>=2.8.3",
+    "httpx>=0.28.1",
     "websockets>=15.0.1",
 ]
-
-[dependency-groups]
+ingestion = [
+    "pymupdf>=1.26.5",
+    "pypdf>=6.1.1",
+    "psycopg[binary,pool]>=3.2.10",
+    "sentence-transformers>=5.1.1",
+    "torch==2.2.2",
+    "numpy<2.0.0",
+]
 dev = [
     "ruff>=0.14.1",
 ]
