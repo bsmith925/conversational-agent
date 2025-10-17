@@ -14,13 +14,17 @@ logger = get_logger(__name__)
 # DSPY SIGNATURES
 class ExtractKeywords(dspy.Signature):
     """From a question and chat history, extract key entities and concepts for a search query."""
+
     chat_history = dspy.InputField(desc="The recent conversation history.")
     question = dspy.InputField(desc="The user's latest question.")
-    keywords = dspy.OutputField(desc="A comma-separated list of key entities, topics, and concepts.")
+    keywords = dspy.OutputField(
+        desc="A comma-separated list of key entities, topics, and concepts."
+    )
 
 
 class GenerateHypotheticalAnswer(dspy.Signature):
     """Given a question and history, generate a hypothetical ideal answer to use for searching."""
+
     chat_history = dspy.InputField(desc="The recent conversation history.")
     question = dspy.InputField(desc="The user's latest question.")
     hypothetical_answer = dspy.OutputField(
@@ -30,7 +34,10 @@ class GenerateHypotheticalAnswer(dspy.Signature):
 
 class FinalAnswerSignature(dspy.Signature):
     """Answer questions based on context from the knowledge base and the conversation history."""
-    context: List[str] = dspy.InputField(desc="Relevant documents from the knowledge base.")
+
+    context: List[str] = dspy.InputField(
+        desc="Relevant documents from the knowledge base."
+    )
     question: str = dspy.InputField(desc="The user's original, unmodified question.")
     chat_history: str = dspy.InputField(desc="Recent conversation history for context.")
     answer: str = dspy.OutputField(
@@ -49,7 +56,7 @@ CRITICAL RULES:
 
 class QueryUnderstandingEngine(dspy.Module):
     """A DSPy module dedicated to understanding the user's query in context."""
-    
+
     def __init__(self):
         super().__init__()
         self.extract_keywords = dspy.Predict(ExtractKeywords)
@@ -62,37 +69,37 @@ class QueryUnderstandingEngine(dspy.Module):
             return question
 
         logger.info("Query Understanding Engine: Activated for multi-turn context.")
-        
+
         # Run keyword extraction and HyDE generation in parallel
         keywords_pred, hyde_pred = await asyncio.gather(
             self.extract_keywords.acall(question=question, chat_history=chat_history),
-            self.generate_hyde.acall(question=question, chat_history=chat_history)
+            self.generate_hyde.acall(question=question, chat_history=chat_history),
         )
-        
+
         keywords = keywords_pred.keywords
         hypothetical_answer = hyde_pred.hypothetical_answer
-        
+
         # Combine into search query
         final_search_query = (
             f"{question} | Relevant concepts: {keywords} | "
             f"Potential answer context: {hypothetical_answer}"
         )
-        
+
         logger.info(f"Original question: '{question}'")
         logger.info(f"Synthesized search query: '{final_search_query[:250]}...'")
-        
+
         return final_search_query
 
 
 class RAGService:
     """RAG service with query understanding and answer generation."""
-    
+
     def __init__(
-        self, 
+        self,
         retriever: Retriever,
         embedding_model: SentenceTransformer,
         db_connection: AsyncConnection,
-        k: int = None
+        k: int = None,
     ):
         self.retriever = retriever
         self.embedding_model = embedding_model
@@ -100,57 +107,47 @@ class RAGService:
         self.k = k or settings.rag_k
         self.query_engine = QueryUnderstandingEngine()
         self.generate_answer = dspy.ChainOfThought(FinalAnswerSignature)
-    
-    async def process_query(
-        self, 
-        question: str, 
-        chat_history: str
-    ) -> RAGResult:
+
+    async def process_query(self, question: str, chat_history: str) -> RAGResult:
         """Process a query through the RAG pipeline."""
-        
+
         # Understand query
         search_query = await self.query_engine.aforward(question, chat_history)
-        
+
         # Retrieve documents
         retrieved_docs = await self.retriever.retrieve_documents(
-            search_query,
-            self.embedding_model,
-            self.db_connection,
-            k=self.k
+            search_query, self.embedding_model, self.db_connection, k=self.k
         )
-        
+
         # Handle no context
         # TODO: handle this better. not sure yet.
         if not retrieved_docs:
             logger.warning("No relevant documents found for the synthesized query.")
             return RAGResult(
                 answer="I couldn't find any information about that in my knowledge base. "
-                       "Could you try asking in a different way?",
+                "Could you try asking in a different way?",
                 retrieved_docs=[],
-                search_query=search_query
+                search_query=search_query,
             )
-        
+
         # Step 4: Generate answer
         context_passages = [
-            f"[Source: {doc['source']}, Page: {doc['page']}]\n{doc['content']}" 
+            f"[Source: {doc['source']}, Page: {doc['page']}]\n{doc['content']}"
             for doc in retrieved_docs
         ]
-        
+
         prediction = await self.generate_answer.acall(
             context=context_passages,
             question=question,  # Use original question
-            chat_history=chat_history
+            chat_history=chat_history,
         )
-        
+
         logger.info(f"Answer generated (length: {len(prediction.answer)} chars)")
 
-        retrieved_doc_models = [
-            RetrievedDocument(**doc) for doc in retrieved_docs
-        ]
-        
+        retrieved_doc_models = [RetrievedDocument(**doc) for doc in retrieved_docs]
+
         return RAGResult(
             answer=prediction.answer,
             retrieved_docs=retrieved_doc_models,
-            search_query=search_query
+            search_query=search_query,
         )
-

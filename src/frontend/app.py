@@ -4,7 +4,7 @@ import uuid
 import json
 import asyncio
 import websockets
-from websockets.exceptions import ConnectionClosed, WebSocketException
+from websockets.exceptions import ConnectionClosed
 
 from config import settings
 
@@ -16,6 +16,7 @@ WS_URL = settings.ws_url
 
 
 # Backend health check
+
 
 async def check_backend_health() -> bool:
     """Check if backend is healthy."""
@@ -147,6 +148,7 @@ class WSManager:
 # Chainlit handlers
 # ---------------------------------------------------------------------------
 
+
 @cl.on_chat_start
 async def start_chat():
     """Initialize the chat session and establish WebSocket manager."""
@@ -185,7 +187,9 @@ async def start_chat():
     cl.user_session.set("ws_manager", manager)
     await manager.start()
 
-    await cl.Message(content="I'm an expert on ADHD medications. Ask me anything about it!").send()
+    await cl.Message(
+        content="I'm an expert on ADHD medications. Ask me anything about it!"
+    ).send()
 
 
 @cl.on_message
