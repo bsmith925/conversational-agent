@@ -13,34 +13,35 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     setup_logging()
-    
+
     # Test critical dependencies
     try:
         from app.dependencies.database import get_connection_pool
         from app.dependencies.cache import get_redis_client
-        
+
         # Test database
         pool = get_connection_pool()
         await pool.open()
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("SELECT 1")
-        
+
         # Test Redis
         redis_client = get_redis_client()
         await redis_client.ping()
-        
+
         logger.info("All dependencies initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize dependencies: {e}", exc_info=True)
         raise
-    
+
     yield
     await close_redis_client()
-    
+
     # Close database connection pool
     try:
         from app.dependencies.database import get_connection_pool
+
         pool = get_connection_pool()
         await pool.close()
         logger.info("Database connection pool closed")
@@ -51,11 +52,9 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Application factory."""
     app = FastAPI(
-        title=settings.api_title,
-        version=settings.api_version,
-        lifespan=lifespan
+        title=settings.api_title, version=settings.api_version, lifespan=lifespan
     )
-    
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -64,13 +63,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Include routers
     app.include_router(health.router, prefix=settings.api_prefix)
     app.include_router(chat.router, prefix=settings.api_prefix)
     # No prefix for WebSocket
-    app.include_router(websocket.router)  
-    
+    app.include_router(websocket.router)
+
     return app
 
 

@@ -51,9 +51,12 @@ REQS.headers.update({"User-Agent": UA})
 # ---------- Logging ----------
 logger = logging.getLogger("wiki_pdf_builder")
 
+
 def setup_logging(level: str, log_file: Optional[Path]) -> None:
     logger.setLevel(getattr(logging, level.upper()))
-    fmt = logging.Formatter(fmt="%(asctime)s | %(levelname)s | %(message)s", datefmt="%H:%M:%S")
+    fmt = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)s | %(message)s", datefmt="%H:%M:%S"
+    )
     ch = logging.StreamHandler()
     ch.setFormatter(fmt)
     ch.setLevel(getattr(logging, level.upper()))
@@ -65,13 +68,16 @@ def setup_logging(level: str, log_file: Optional[Path]) -> None:
         fh.setLevel(getattr(logging, level.upper()))
         logger.addHandler(fh)
 
+
 # ---------- MediaWiki Action API ----------
 def mw_api(params: Dict, tries: int = 3, backoff: float = 1.5) -> Dict:
     params = {"format": "json", "formatversion": 2, **params}
     for attempt in range(tries):
         r = REQS.get(API, params=params, timeout=30)
         if r.status_code in (429,) or r.status_code >= 500:
-            logger.debug("mw_api backoff: status %s (attempt %d)", r.status_code, attempt + 1)
+            logger.debug(
+                "mw_api backoff: status %s (attempt %d)", r.status_code, attempt + 1
+            )
             if attempt + 1 == tries:
                 r.raise_for_status()
             time.sleep(backoff ** (attempt + 1))
@@ -80,7 +86,10 @@ def mw_api(params: Dict, tries: int = 3, backoff: float = 1.5) -> Dict:
         return r.json()
     return {}
 
-def gather_category_pages(roots: Iterable[str], depth: int = 1, limit_per_cat: int = 1000) -> Set[str]:
+
+def gather_category_pages(
+    roots: Iterable[str], depth: int = 1, limit_per_cat: int = 1000
+) -> Set[str]:
     to_visit: List[Tuple[str, int]] = [(root, 0) for root in roots]
     seen_cats: Set[str] = set()
     pages: Set[str] = set()
@@ -117,6 +126,7 @@ def gather_category_pages(roots: Iterable[str], depth: int = 1, limit_per_cat: i
         time.sleep(0.1)  # small courtesy pause
     return pages
 
+
 def search_pages(query: str, max_results: int = 500) -> Set[str]:
     titles: Set[str] = set()
     sroffset = 0
@@ -141,13 +151,16 @@ def search_pages(query: str, max_results: int = 500) -> Set[str]:
         time.sleep(0.1)
     return titles
 
+
 # ---------- RPS limiter ----------
 class RPSLimiter:
     """Limit request start rate to ~rps (per second)."""
+
     def __init__(self, rps: float):
         self.rps = max(0.1, rps)
         self.window = deque()
         self.lock = asyncio.Lock()
+
     async def wait(self):
         async with self.lock:
             now = time.monotonic()
@@ -162,10 +175,12 @@ class RPSLimiter:
                     self.window.popleft()
             self.window.append(time.monotonic())
 
+
 # ---------- Download helpers ----------
 def pdf_path_for(title: str, out_dir: Path) -> Path:
     safe_stem = title.replace("/", " ").strip()
     return out_dir / f"{safe_stem}.pdf"
+
 
 async def fetch_pdf(
     session: aiohttp.ClientSession,
@@ -195,28 +210,55 @@ async def fetch_pdf(
         try:
             await rps_limiter.wait()
             async with semaphore:
-                async with session.get(url, allow_redirects=True, timeout=timeout) as resp:
+                async with session.get(
+                    url, allow_redirects=True, timeout=timeout
+                ) as resp:
                     if resp.status in (429,) or 500 <= resp.status < 600:
                         retry_after = resp.headers.get("Retry-After")
                         _ = await resp.read()  # free the connection
                         attempt += 1
                         if attempt > retries:
-                            return (title, "failed", f"HTTP {resp.status} after retries", path)
-                        sleep_s = float(retry_after) if (retry_after and retry_after.isdigit()) else (base_backoff ** attempt)
+                            return (
+                                title,
+                                "failed",
+                                f"HTTP {resp.status} after retries",
+                                path,
+                            )
+                        sleep_s = (
+                            float(retry_after)
+                            if (retry_after and retry_after.isdigit())
+                            else (base_backoff**attempt)
+                        )
                         sleep_s += random.uniform(0, 0.5)  # jitter
-                        logger.warning("Rate/server busy (%s). Retrying %r in %.2fs (attempt %d/%d)",
-                                       resp.status, title, sleep_s, attempt, retries)
+                        logger.warning(
+                            "Rate/server busy (%s). Retrying %r in %.2fs (attempt %d/%d)",
+                            resp.status,
+                            title,
+                            sleep_s,
+                            attempt,
+                            retries,
+                        )
                         await asyncio.sleep(sleep_s)
                         continue
 
                     if resp.status != 200:
                         txt = await resp.text()
-                        return (title, "failed", f"HTTP {resp.status}: {txt[:200]}", path)
+                        return (
+                            title,
+                            "failed",
+                            f"HTTP {resp.status}: {txt[:200]}",
+                            path,
+                        )
 
                     ctype = resp.headers.get("Content-Type", "")
                     if "pdf" not in ctype.lower():
                         txt = await resp.text()
-                        return (title, "failed", f"Unexpected content type: {ctype}; body: {txt[:200]}", path)
+                        return (
+                            title,
+                            "failed",
+                            f"Unexpected content type: {ctype}; body: {txt[:200]}",
+                            path,
+                        )
 
                     out_dir.mkdir(parents=True, exist_ok=True)
                     data = await resp.read()
@@ -228,14 +270,21 @@ async def fetch_pdf(
             attempt += 1
             if attempt > retries:
                 return (title, "failed", f"{type(e).__name__}: {e}", path)
-            sleep_s = (base_backoff ** attempt) + random.uniform(0, 0.5)
-            logger.warning("Network issue. Retrying %r in %.2fs (attempt %d/%d): %s",
-                           title, sleep_s, attempt, retries, e)
+            sleep_s = (base_backoff**attempt) + random.uniform(0, 0.5)
+            logger.warning(
+                "Network issue. Retrying %r in %.2fs (attempt %d/%d): %s",
+                title,
+                sleep_s,
+                attempt,
+                retries,
+                e,
+            )
             await asyncio.sleep(sleep_s)
         except Exception as e:
             return (title, "failed", f"{type(e).__name__}: {e}", path)
 
     return (title, "failed", "Exhausted retries", path)
+
 
 async def download_many(
     titles: List[str],
@@ -258,7 +307,9 @@ async def download_many(
 
     new_count = skipped_count = failed_count = 0
 
-    async with aiohttp.ClientSession(connector=connector, headers=headers, raise_for_status=False) as session:
+    async with aiohttp.ClientSession(
+        connector=connector, headers=headers, raise_for_status=False
+    ) as session:
         tasks = [
             fetch_pdf(
                 session=session,
@@ -286,25 +337,86 @@ async def download_many(
 
     return new_count, skipped_count, failed_count
 
+
 # ---------- Main ----------
 def main():
-    ap = argparse.ArgumentParser(description="Wikipedia PDF dataset builder (concurrent, rate-limited, logging).")
-    ap.add_argument("--root", action="append", required=True,
-                    help='Root category (e.g., "Category:Tudor England"). Can be used multiple times.')
-    ap.add_argument("--depth", type=int, default=1, help="Category crawl depth (default: 1).")
-    ap.add_argument("--search", type=str, default="", help="Optional full-text search query to mix in.")
-    ap.add_argument("--search-max", type=int, default=300, help="Max search titles to include (default: 300).")
-    ap.add_argument("--sample", type=int, default=100, help="Random sample size for final set (default: 100).")
-    ap.add_argument("--seed", type=int, default=None, help="Random seed for reproducible sampling.")
-    ap.add_argument("--out", type=Path, default=Path("pdfs"), help="Output directory for PDFs.")
-    ap.add_argument("--concurrency", type=int, default=6, help="Concurrent downloads (default: 6).")
-    ap.add_argument("--rps", type=float, default=2.0, help="Global requests per second limit (default: 2).")
-    ap.add_argument("--overwrite", action="store_true", help="Re-download and overwrite existing PDFs.")
-    ap.add_argument("--timeout", type=int, default=90, help="Per-request timeout in seconds (default: 90).")
-    ap.add_argument("--retries", type=int, default=4, help="Retries for 429/5xx/timeouts (default: 4).")
-    ap.add_argument("--backoff", type=float, default=1.7, help="Exponential backoff base (default: 1.7).")
-    ap.add_argument("--log-level", type=str, default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR).")
-    ap.add_argument("--log-file", type=Path, default=None, help="Optional log file path.")
+    ap = argparse.ArgumentParser(
+        description="Wikipedia PDF dataset builder (concurrent, rate-limited, logging)."
+    )
+    ap.add_argument(
+        "--root",
+        action="append",
+        required=True,
+        help='Root category (e.g., "Category:Tudor England"). Can be used multiple times.',
+    )
+    ap.add_argument(
+        "--depth", type=int, default=1, help="Category crawl depth (default: 1)."
+    )
+    ap.add_argument(
+        "--search",
+        type=str,
+        default="",
+        help="Optional full-text search query to mix in.",
+    )
+    ap.add_argument(
+        "--search-max",
+        type=int,
+        default=300,
+        help="Max search titles to include (default: 300).",
+    )
+    ap.add_argument(
+        "--sample",
+        type=int,
+        default=100,
+        help="Random sample size for final set (default: 100).",
+    )
+    ap.add_argument(
+        "--seed", type=int, default=None, help="Random seed for reproducible sampling."
+    )
+    ap.add_argument(
+        "--out", type=Path, default=Path("pdfs"), help="Output directory for PDFs."
+    )
+    ap.add_argument(
+        "--concurrency", type=int, default=6, help="Concurrent downloads (default: 6)."
+    )
+    ap.add_argument(
+        "--rps",
+        type=float,
+        default=2.0,
+        help="Global requests per second limit (default: 2).",
+    )
+    ap.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Re-download and overwrite existing PDFs.",
+    )
+    ap.add_argument(
+        "--timeout",
+        type=int,
+        default=90,
+        help="Per-request timeout in seconds (default: 90).",
+    )
+    ap.add_argument(
+        "--retries",
+        type=int,
+        default=4,
+        help="Retries for 429/5xx/timeouts (default: 4).",
+    )
+    ap.add_argument(
+        "--backoff",
+        type=float,
+        default=1.7,
+        help="Exponential backoff base (default: 1.7).",
+    )
+    ap.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        help="Logging level (DEBUG, INFO, WARNING, ERROR).",
+    )
+    ap.add_argument(
+        "--log-file", type=Path, default=None, help="Optional log file path."
+    )
     args = ap.parse_args()
 
     setup_logging(args.log_level, args.log_file)
@@ -344,8 +456,14 @@ def main():
         )
     )
 
-    logger.info("Done. New: %d | Skipped (already had): %d | Failed: %d | Out: %s",
-                new_count, skipped_count, failed_count, args.out.resolve())
+    logger.info(
+        "Done. New: %d | Skipped (already had): %d | Failed: %d | Out: %s",
+        new_count,
+        skipped_count,
+        failed_count,
+        args.out.resolve(),
+    )
+
 
 if __name__ == "__main__":
     main()

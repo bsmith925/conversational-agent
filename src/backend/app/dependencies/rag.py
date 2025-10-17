@@ -11,8 +11,7 @@ logger = get_logger(__name__)
 
 # Initialize DSPy LM at module level
 lm = dspy.LM(
-    model="openrouter/google/gemini-2.5-pro",
-    max_tokens=settings.llm_max_tokens
+    model="openrouter/google/gemini-2.5-pro", max_tokens=settings.llm_max_tokens
 )
 # Sets the default LM globally for dspy. Can be overridden (e.g. in forward pass)
 dspy.settings.configure(lm=lm)
@@ -21,7 +20,7 @@ dspy.settings.configure(lm=lm)
 def get_rag_service(
     retriever: RetrieverDep,
     embedding_model: EmbeddingModel,
-    db_connection: DatabaseConnection
+    db_connection: DatabaseConnection,
 ) -> RAGService:
     """Dependency that provides a RAG service."""
     try:

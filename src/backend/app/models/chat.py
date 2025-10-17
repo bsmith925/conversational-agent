@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class ChatMessage(BaseModel):
     """A chat message."""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     role: Literal["user", "assistant", "system"]
     content: str
@@ -15,12 +16,14 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
+
     message: str = Field(..., min_length=1, max_length=10000)
     session_id: Optional[str] = Field(default=None)
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
+
     answer: str
     session_id: str
     retrieved_docs: List[Dict[str, Any]] = Field(default_factory=list)
@@ -28,6 +31,7 @@ class ChatResponse(BaseModel):
 
 class WSMessage(BaseModel):
     """WebSocket message format."""
+
     type: Literal["start", "token", "step", "end", "error"]
     content: str
     step_name: Optional[str] = None

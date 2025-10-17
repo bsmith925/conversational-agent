@@ -9,7 +9,7 @@ logger = get_logger(__name__)
 
 class RedisChatMessageHistory:
     """Manages chat history in Redis."""
-    
+
     def __init__(self, redis_client: redis.Redis, ttl: int):
         self.redis_client = redis_client
         self.ttl = ttl
@@ -28,14 +28,14 @@ class RedisChatMessageHistory:
         """Retrieve the last N messages from the history."""
         key = self._get_key(session_id)
         raw_messages = await self.redis_client.lrange(key, -limit, -1)
-        
+
         messages = []
         for raw_msg in raw_messages:
             msg_dict = json.loads(raw_msg)
             messages.append(ChatMessage.model_validate(msg_dict))
-                
+
         return messages
-        
+
     async def clear(self, session_id: str) -> None:
         """Clears the chat history for the session."""
         key = self._get_key(session_id)

@@ -19,7 +19,7 @@ def get_connection_pool() -> psycopg_pool.AsyncConnectionPool:
             min_size=2,
             max_size=10,
             kwargs={"autocommit": True},
-            open=False 
+            open=False,
         )
         logger.info("Database connection pool created")
         return pool
@@ -28,7 +28,9 @@ def get_connection_pool() -> psycopg_pool.AsyncConnectionPool:
         raise
 
 
-async def get_db_connection(pool: psycopg_pool.AsyncConnectionPool = Depends(get_connection_pool)) -> AsyncConnection:
+async def get_db_connection(
+    pool: psycopg_pool.AsyncConnectionPool = Depends(get_connection_pool),
+) -> AsyncConnection:
     """Dependency that provides a database connection from the pool."""
     try:
         # Ensure pool is open
@@ -36,7 +38,7 @@ async def get_db_connection(pool: psycopg_pool.AsyncConnectionPool = Depends(get
             await pool.open()
         except Exception:
             pass
-        
+
         connection = await pool.getconn()
         # Test the connection. NOTE: Leaving for now. Remove later.
         async with connection.cursor() as cur:

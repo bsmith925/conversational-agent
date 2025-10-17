@@ -14,17 +14,11 @@ logger = get_logger(__name__)
 @lru_cache(maxsize=1)
 def get_chat_history_manager(redis_client: RedisClient) -> RedisChatMessageHistory:
     """Dependency that provides a singleton chat history manager."""
-    return RedisChatMessageHistory(
-        redis_client=redis_client,
-        ttl=settings.redis_ttl
-    )
+    return RedisChatMessageHistory(redis_client=redis_client, ttl=settings.redis_ttl)
 
 
 @lru_cache(maxsize=1)
-def get_chat_service(
-    rag_service: RAGDep,
-    redis_client: RedisClient
-) -> ChatService:
+def get_chat_service(rag_service: RAGDep, redis_client: RedisClient) -> ChatService:
     """Dependency that provides a singleton ChatService."""
     try:
         history_manager = get_chat_history_manager(redis_client)
@@ -35,5 +29,7 @@ def get_chat_service(
 
 
 # Type aliases for dependency injection
-ChatHistoryManager = Annotated[RedisChatMessageHistory, Depends(get_chat_history_manager)]
+ChatHistoryManager = Annotated[
+    RedisChatMessageHistory, Depends(get_chat_history_manager)
+]
 RAGChatService = Annotated[ChatService, Depends(get_chat_service)]

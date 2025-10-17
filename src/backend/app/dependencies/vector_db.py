@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 def get_embedding_model() -> SentenceTransformer:
     """Singleton embedding model."""
     logger.info(f"Loading embedding model: {settings.embedding_model_name}")
-    model = SentenceTransformer(settings.embedding_model_name, device='cpu')
+    model = SentenceTransformer(settings.embedding_model_name, device="cpu")
     logger.info("Embedding model loaded")
     return model
 
