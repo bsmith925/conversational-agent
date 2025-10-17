@@ -1,3 +1,4 @@
+# src/backend/app/services/rag/retrieval.py
 from typing import List, Dict, Any
 import psycopg
 from sentence_transformers import SentenceTransformer
@@ -6,18 +7,17 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# I'm not sure on how I want to name & split yet. 
-# I'll need to do a pass over with SOLID principles.
-# First thought, class Retrieval as a service. That uses VectorDB dep.
-class VectorDatabase:
-    """Service for vector database operations."""
+
+class Retriever:
+    """Service for document retrieval from vector database."""
     
-    def __init__(self, embedding_model: SentenceTransformer):
-        self.embedding_model = embedding_model
+    def __init__(self):
+        pass
     
     async def retrieve_documents(
         self, 
-        query: str, 
+        query: str,
+        embedding_model: SentenceTransformer,
         k: int = 5,
         similarity_threshold: float = None
     ) -> List[Dict[str, Any]]:
@@ -30,7 +30,7 @@ class VectorDatabase:
         try:
             async with await psycopg.AsyncConnection.connect(settings.postgres_dsn) as aconn:
                 async with aconn.cursor() as acur:
-                    query_embedding = self.embedding_model.encode(
+                    query_embedding = embedding_model.encode(
                         query, 
                         convert_to_tensor=False
                     )
@@ -75,3 +75,4 @@ class VectorDatabase:
         except Exception as e:
             logger.error(f"Postgres retrieval failed: {e}", exc_info=True)
             return []
+

@@ -2,7 +2,7 @@ from typing import Annotated
 from functools import lru_cache
 from fastapi import Depends
 from sentence_transformers import SentenceTransformer
-from app.services.database import VectorDatabase
+from app.services.rag.retrieval import Retriever
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -18,12 +18,11 @@ def get_embedding_model() -> SentenceTransformer:
     return model
 
 
-def get_vector_database(
-    embedding_model: Annotated[SentenceTransformer, Depends(get_embedding_model)]
-) -> VectorDatabase:
-    """Dependency that provides a VectorDatabase instance."""
-    return VectorDatabase(embedding_model)
+def get_retriever() -> Retriever:
+    """Dependency that provides a Retriever instance."""
+    return Retriever()
 
 
 # Type alias for dependency injection
-VectorDB = Annotated[VectorDatabase, Depends(get_vector_database)]
+RetrieverDep = Annotated[Retriever, Depends(get_retriever)]
+EmbeddingModel = Annotated[SentenceTransformer, Depends(get_embedding_model)]

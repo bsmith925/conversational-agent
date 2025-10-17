@@ -3,7 +3,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.cache import RedisChatMessageHistory
 from app.models.chat import ChatMessage, WSMessage
 from app.dependencies.cache import get_redis_client
-from app.dependencies.vector_db import get_vector_database, get_embedding_model
+from app.dependencies.vector_db import get_retriever, get_embedding_model
 from app.dependencies.rag import get_rag_service
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -55,8 +55,8 @@ async def websocket_endpoint(
     # TODO: move these to use Depends(Annotated[type, fnc])
     redis_client = await get_redis_client()
     embedding_model = get_embedding_model()
-    vector_db = get_vector_database(embedding_model)
-    rag_service = get_rag_service(vector_db)
+    retriever = get_retriever()
+    rag_service = get_rag_service(retriever, embedding_model)
 
     history_manager = RedisChatMessageHistory(
         session_id=session_id,

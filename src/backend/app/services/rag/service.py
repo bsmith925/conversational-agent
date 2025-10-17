@@ -1,7 +1,9 @@
+# src/backend/app/services/rag/service.py
 import asyncio
 from typing import List
 import dspy
-from app.services.database import VectorDatabase
+from sentence_transformers import SentenceTransformer
+from app.services.rag.retrieval import Retriever
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.rag import RAGResult, RetrievedDocument
@@ -85,8 +87,14 @@ class QueryUnderstandingEngine(dspy.Module):
 class RAGService:
     """RAG service with query understanding and answer generation."""
     
-    def __init__(self, vector_db: VectorDatabase, k: int = None):
-        self.vector_db = vector_db
+    def __init__(
+        self, 
+        retriever: Retriever,
+        embedding_model: SentenceTransformer,
+        k: int = None
+    ):
+        self.retriever = retriever
+        self.embedding_model = embedding_model
         self.k = k or settings.rag_k
         self.query_engine = QueryUnderstandingEngine()
         self.generate_answer = dspy.ChainOfThought(FinalAnswerSignature)
@@ -102,8 +110,9 @@ class RAGService:
         search_query = await self.query_engine.aforward(question, chat_history)
         
         # Retrieve documents
-        retrieved_docs = await self.vector_db.retrieve_documents(
-            search_query, 
+        retrieved_docs = await self.retriever.retrieve_documents(
+            search_query,
+            self.embedding_model,
             k=self.k
         )
         
@@ -141,3 +150,4 @@ class RAGService:
             retrieved_docs=retrieved_doc_models,
             search_query=search_query
         )
+
