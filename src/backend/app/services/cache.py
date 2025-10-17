@@ -10,20 +10,24 @@ logger = get_logger(__name__)
 class RedisChatMessageHistory:
     """Manages chat history in Redis."""
     
-    def __init__(self, session_id: str, redis_client: redis.Redis, ttl: int):
+    def __init__(self, redis_client: redis.Redis, ttl: int):
         self.redis_client = redis_client
-        self.session_id = session_id
-        self.key = f"chat_history:{self.session_id}"
         self.ttl = ttl
 
-    async def add_message(self, message: ChatMessage) -> None:
-        """Adds a new message to the history."""
-        await self.redis_client.rpush(self.key, message.model_dump_json())
-        await self.redis_client.expire(self.key, self.ttl)
+    def _get_key(self, session_id: str) -> str:
+        """Get the Redis key for a session."""
+        return f"chat_history:{session_id}"
 
-    async def get_messages(self, limit: int = 20) -> List[ChatMessage]:
+    async def add_message(self, session_id: str, message: ChatMessage) -> None:
+        """Adds a new message to the history."""
+        key = self._get_key(session_id)
+        await self.redis_client.rpush(key, message.model_dump_json())
+        await self.redis_client.expire(key, self.ttl)
+
+    async def get_messages(self, session_id: str, limit: int = 20) -> List[ChatMessage]:
         """Retrieve the last N messages from the history."""
-        raw_messages = await self.redis_client.lrange(self.key, -limit, -1)
+        key = self._get_key(session_id)
+        raw_messages = await self.redis_client.lrange(key, -limit, -1)
         
         messages = []
         for raw_msg in raw_messages:
@@ -32,6 +36,7 @@ class RedisChatMessageHistory:
                 
         return messages
         
-    async def clear(self) -> None:
+    async def clear(self, session_id: str) -> None:
         """Clears the chat history for the session."""
-        await self.redis_client.delete(self.key)
+        key = self._get_key(session_id)
+        await self.redis_client.delete(key)

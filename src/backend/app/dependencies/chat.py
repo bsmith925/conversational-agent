@@ -26,8 +26,12 @@ def get_chat_service(
     redis_client: RedisClient
 ) -> ChatService:
     """Dependency that provides a singleton ChatService."""
-    history_manager = get_chat_history_manager(redis_client)
-    return ChatService(rag_service, history_manager)
+    try:
+        history_manager = get_chat_history_manager(redis_client)
+        return ChatService(rag_service, history_manager)
+    except Exception as e:
+        logger.error(f"Failed to create ChatService: {e}", exc_info=True)
+        raise
 
 
 # Type aliases for dependency injection

@@ -22,7 +22,12 @@ async def websocket_endpoint(
     chat_service: RAGChatService
 ):
     """WebSocket endpoint for streaming chat responses - persistent connection."""
-    await manager.connect(session_id, websocket)
+    try:
+        await manager.connect(session_id, websocket)
+    except Exception as e:
+        logger.error(f"Failed to connect WebSocket for {session_id}: {e}", exc_info=True)
+        await websocket.close(code=1011, reason="Connection failed")
+        return
 
     try:
         while True:

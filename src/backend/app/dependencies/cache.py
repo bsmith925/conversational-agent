@@ -11,14 +11,18 @@ logger = get_logger(__name__)
 @lru_cache()
 def get_redis_client() -> redis.Redis:
     """Dependency that provides a Redis client (singleton)."""
-    client = redis.Redis(
-        host=settings.redis_host,
-        port=settings.redis_port,
-        db=settings.redis_db,
-        decode_responses=True
-    )
-    logger.info("Redis client initialized")
-    return client
+    try:
+        client = redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            db=settings.redis_db,
+            decode_responses=True
+        )
+        logger.info("Redis client initialized")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to initialize Redis client: {e}", exc_info=True)
+        raise
 
 
 async def close_redis_client():
