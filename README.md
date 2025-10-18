@@ -160,14 +160,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 For detailed documentation, see the files linked in the [Documentation](#documentation) section.
 
-## Framework Roadmap
 
-### Current Status
-- ✅ Core framework abstractions (Database, Embedding, Retrieval services)
-- ✅ DSPy integration for query understanding and answer generation
-- ✅ Async architecture with FastAPI
-- ✅ Example implementations (HyDE, Vector retrieval, Redis/PostgreSQL storage)
-- ✅ Working prototype with Chainlit UI
 
 ### Next Steps
 
