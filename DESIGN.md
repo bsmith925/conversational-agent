@@ -39,10 +39,10 @@ The system is designed as a set of decoupled services, orchestrated by a central
 
 ### Technology Choices
 
--   **FastAPI**: Chosen for the backend due to its high performance and my familiarity with it. It enables faster prototyping compared to a more heavyweight framework like Django, without sacrificing production-readiness.
--   **Chainlit**: Used for the frontend to accelerate prototype development. Its Python-based nature allows for rapid iteration and keeps the entire stack within a single language, simplifying the development process.
--   **PostgreSQL**: Selected for its maturity, reliability, and robust feature set. My familiarity with it allows for rapid development, while its support for extensions like `pgvector` is critical for the RAG implementation. It also offers a clear path to high availability and low-latency performance in production, with well-established patterns for migrations and scalability.
--   **Redis**: Implemented for session management and caching. Its in-memory data structure provides the low-latency performance required for a responsive user experience. My familiarity with Redis makes for quick implementation, and its support for clustering and persistence provides a clear path to a high-availability cache layer with necessary fail-safes for production.
+-   **FastAPI**: Chosen for the backend due to its high performance and my familiarity with it. It enables faster prototyping compared to a more heavyweight framework like Django, without sacrificing production-readiness. The tradeoff is that it's less "batteries-included," requiring more explicit configuration for components like an ORM or admin interfaces.
+-   **Chainlit**: Used for the frontend to accelerate prototype development. Its Python-based nature allows for rapid iteration. The tradeoff is less UI flexibility compared to a standard frontend framework like React or Vue, which would be a better choice for highly custom or branded user experiences.
+-   **PostgreSQL**: Selected for its maturity, reliability, and robust feature set. My familiarity with it allows for rapid development. Its support for extensions like `pgvector` is critical for the RAG implementation, offering a powerful, integrated solution that simplifies the operational overhead of the system. The tradeoff for this convenience is that at extreme scale (billions of vectors), a dedicated vector database might offer higher performance. However, for many enterprise use cases, `pgvector` provides an excellent balance of performance and maintainability.
+-   **Redis**: Implemented for session management and caching. Its in-memory data structure provides the low-latency performance required for a responsive user experience. The tradeoff is that its default configuration prioritizes speed over durability. While this is acceptable for caching and non-critical session data, the production strategy includes configuring persistence as a fail-safe.
 
 ### Pluggable Modules
 
@@ -74,9 +74,20 @@ The core RAG workflow consists of four stages:
 3.  **Generation**: The retrieved documents, the original question, and the chat history are passed to a `dspy.ChainOfThought` module, which generates a comprehensive, context-aware answer.
 4.  **Streaming**: The generated response is streamed to the user in real-time via WebSockets for an interactive experience.
 
+This pipeline explicitly trades higher latency for better accuracy. Steps like generating a hypothetical answer involve an extra LLM call but significantly improve the chances of retrieving relevant documents. A simpler, lower-latency approach might involve embedding the user's query directly, but this could fail on complex or ambiguous questions. The choice of LLM for each stage also presents a tradeoff between cost, speed, and quality. My goal of building a formal evaluation framework is to systematically measure and optimize these tradeoffs based on defined accuracy metrics (e.g., precision, recall, hallucination rate) and performance targets.
+
 ### Session Management
 
 Conversational context is maintained through UUID-based sessions managed in Redis, providing fast access to chat history. This enables multi-turn conversations and ensures that follow-up questions are understood in context. Sessions have a configurable TTL (defaulting to one hour) to manage memory usage effectively.
+
+### Data Ingestion and Processing
+
+A significant engineering challenge in any RAG system is the pipeline for ingesting, processing, and indexing documents. The quality of retrieval is highly dependent on this "data-to-vector" pipeline. The process involves several key stages:
+
+-   **Document Loading & Parsing**: The system needs to handle various document formats, such as PDF, CSV, PPT, Markdown, and others. This stage involves extracting clean text and relevant metadata from raw files, which often requires dealing with complex layouts, tables, and images.
+-   **Text Splitting (Chunking)**: Documents are broken down into smaller chunks for embedding. This is a critical step with a major tradeoff between context and precision. Small chunks are precise but may lack broader context, while large chunks retain context but can introduce noise into the retrieval process. The framework is designed to support various chunking strategies (e.g., recursive, semantic) to manage this tradeoff.
+-   **Embedding & Storage**: Each chunk is converted into a vector embedding and stored in PostgreSQL alongside its original text and metadata. This metadata is crucial for filtering and providing source attribution in answers.
+-   **Synchronization**: A key production challenge is keeping the vector database synchronized with the original data sources. The current design supports manual re-indexing, with a roadmap for automated, event-driven updates.
 
 ## 5. Production Readiness Strategy
 
