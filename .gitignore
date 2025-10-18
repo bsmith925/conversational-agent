@@ -27,3 +27,4 @@ pdfs/
 .env
 
 .DS_Store
+.coverage
