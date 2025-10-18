@@ -8,7 +8,8 @@ uv run dataset/download.py \
   --sample 400 \
   --out pdfs/tudor_royal_line
 
-
+# This is the set of PDFs I actually used
+```bash
 uv run dataset/download.py \
   --root "Category:ADHD" \
   --root "Category:Attention deficit hyperactivity disorder" \
@@ -23,3 +24,10 @@ uv run dataset/download.py \
   --concurrency 6 \
   --rps 2 \
   --log-level INFO
+```
+
+afterwards run 
+```bash
+uv run src/ingest/ingest.py
+```
+but it won't hit the correct path from download. Since I haven't updated after major refactors as I got closer to the framework design I wanted. 
