@@ -33,7 +33,7 @@ This framework provides a foundation for building any conversational AI applicat
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/bsmith925/conversational-agent.git
 cd conversational-agent
 
 # Set up environment variables
@@ -56,11 +56,11 @@ Access the UI at http://localhost:8080
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/bsmith925/conversational-agent.git
 cd conversational-agent
 
 # Install dependencies
-uv sync
+uv sync --all-groups
 
 # Start infrastructure (PostgreSQL + Redis)
 docker-compose up -d postgres redis
