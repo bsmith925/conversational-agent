@@ -1,7 +1,8 @@
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.models.chat import ChatRequest, ChatResponse
-from app.dependencies.chat import RAGChatService
+from app.dependencies.chat import get_chat_service
+from app.services.chat import ChatService
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -10,7 +11,9 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(request: ChatRequest, chat_service: RAGChatService):
+async def chat(
+    request: ChatRequest, chat_service: ChatService = Depends(get_chat_service)
+):
     """
     Process a chat message and return a response.
     """
@@ -35,8 +38,10 @@ async def chat(request: ChatRequest, chat_service: RAGChatService):
 
 
 @router.delete("/{session_id}")
-async def clear_history(session_id: str, chat_service: RAGChatService):
+async def clear_history(
+    session_id: str, chat_service: ChatService = Depends(get_chat_service)
+):
     """Clear chat history for a session."""
-    await chat_service.history_manager.clear(session_id)
+    await chat_service.cache.clear(session_id)
 
     return {"message": f"Chat history cleared for session {session_id}"}

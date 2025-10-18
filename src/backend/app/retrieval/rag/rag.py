@@ -1,35 +1,14 @@
-import asyncio
 from typing import List
 import dspy
-from psycopg import AsyncConnection
-from sentence_transformers import SentenceTransformer
-from app.services.rag.retrieval import Retriever
+from app.embeddings import EmbeddingService
+from app.database import DatabaseService
+from .search.hyde import HyDESearch
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.rag import RAGResult, RetrievedDocument
+from .query.engine import QueryUnderstandingEngine
 
 logger = get_logger(__name__)
-
-
-# DSPY SIGNATURES
-class ExtractKeywords(dspy.Signature):
-    """From a question and chat history, extract key entities and concepts for a search query."""
-
-    chat_history = dspy.InputField(desc="The recent conversation history.")
-    question = dspy.InputField(desc="The user's latest question.")
-    keywords = dspy.OutputField(
-        desc="A comma-separated list of key entities, topics, and concepts."
-    )
-
-
-class GenerateHypotheticalAnswer(dspy.Signature):
-    """Given a question and history, generate a hypothetical ideal answer to use for searching."""
-
-    chat_history = dspy.InputField(desc="The recent conversation history.")
-    question = dspy.InputField(desc="The user's latest question.")
-    hypothetical_answer = dspy.OutputField(
-        desc="A detailed, paragraph-length hypothetical answer as if found in a perfect document."
-    )
 
 
 class FinalAnswerSignature(dspy.Signature):
@@ -53,59 +32,21 @@ CRITICAL RULES:
 3. Reference the source of your information, e.g., 'According to [Source: file.pdf, Page: 3], ...'
 4. Be precise and accurate. If the context is insufficient, explicitly state that."""
 
-
-class QueryUnderstandingEngine(dspy.Module):
-    """A DSPy module dedicated to understanding the user's query in context."""
-
-    def __init__(self):
-        super().__init__()
-        self.extract_keywords = dspy.Predict(ExtractKeywords)
-        self.generate_hyde = dspy.Predict(GenerateHypotheticalAnswer)
-
-    async def aforward(self, question: str, chat_history: str) -> str:
-        """Takes raw user input and chat history, returns an optimized search query."""
-        if not chat_history.strip():
-            logger.info("First turn, using original question for search.")
-            return question
-
-        logger.info("Query Understanding Engine: Activated for multi-turn context.")
-
-        # Run keyword extraction and HyDE generation in parallel
-        keywords_pred, hyde_pred = await asyncio.gather(
-            self.extract_keywords.acall(question=question, chat_history=chat_history),
-            self.generate_hyde.acall(question=question, chat_history=chat_history),
-        )
-
-        keywords = keywords_pred.keywords
-        hypothetical_answer = hyde_pred.hypothetical_answer
-
-        # Combine into search query
-        final_search_query = (
-            f"{question} | Relevant concepts: {keywords} | "
-            f"Potential answer context: {hypothetical_answer}"
-        )
-
-        logger.info(f"Original question: '{question}'")
-        logger.info(f"Synthesized search query: '{final_search_query[:250]}...'")
-
-        return final_search_query
-
-
+# TODO: Service naming convention removal after refactor fully complete
 class RAGService:
     """RAG service with query understanding and answer generation."""
 
     def __init__(
         self,
-        retriever: Retriever,
-        embedding_model: SentenceTransformer,
-        db_connection: AsyncConnection,
+        embedding: EmbeddingService,
+        database: DatabaseService,
         k: int = None,
     ):
-        self.retriever = retriever
-        self.embedding_model = embedding_model
-        self.db_connection = db_connection
+        self.embedding = embedding
+        self.database = database
         self.k = k or settings.rag_k
         self.query_engine = QueryUnderstandingEngine()
+        self.search_strategy = HyDESearch(database, embedding)
         self.generate_answer = dspy.ChainOfThought(FinalAnswerSignature)
 
     async def process_query(self, question: str, chat_history: str) -> RAGResult:
@@ -114,10 +55,8 @@ class RAGService:
         # Understand query
         search_query = await self.query_engine.aforward(question, chat_history)
 
-        # Retrieve documents
-        retrieved_docs = await self.retriever.retrieve_documents(
-            search_query, self.embedding_model, self.db_connection, k=self.k
-        )
+        # Search using HyDE strategy
+        retrieved_docs = await self.search_strategy.search(search_query, k=self.k)
 
         # Handle no context
         # TODO: handle this better. not sure yet.

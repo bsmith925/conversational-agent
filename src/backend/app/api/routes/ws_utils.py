@@ -2,6 +2,7 @@ import json
 from typing import List, Dict, Any
 from app.dependencies.websocket import ConnectionManager
 from app.models.chat import WSMessage
+import re
 
 
 async def send_start(manager: ConnectionManager, session_id: str):
@@ -22,10 +23,12 @@ async def send_step(
 
 
 async def send_tokens(manager: ConnectionManager, session_id: str, text: str):
-    """Stream text as word tokens to client."""
-    words = text.split()
-    for i, word in enumerate(words):
-        token = word if i == 0 else f" {word}"
+    """Stream text preserving formatting to client."""
+    # Split by words but preserve whitespace. I was losing formatting here before
+
+    tokens = re.findall(r"\S+|\s+", text)
+
+    for token in tokens:
         await manager.send_message(session_id, WSMessage(type="token", content=token))
 
 

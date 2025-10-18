@@ -1,7 +1,8 @@
 import json
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from app.dependencies.websocket import ConnectionManagerDep
-from app.dependencies.chat import RAGChatService
+from app.dependencies.chat import get_chat_service
+from app.services.chat import ChatService
 from app.api.routes.ws_utils import (
     send_start,
     send_step,
@@ -21,7 +22,7 @@ async def websocket_endpoint(
     websocket: WebSocket,
     session_id: str,
     manager: ConnectionManagerDep,
-    chat_service: RAGChatService,
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """WebSocket endpoint for streaming chat responses - persistent connection."""
     try:

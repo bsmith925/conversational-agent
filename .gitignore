@@ -26,3 +26,4 @@ pdfs/
 # .env
 .env
 
+.DS_Store

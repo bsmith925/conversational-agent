@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.dependencies.cache import close_redis_client
 from app.api.routes import chat, health, websocket
+import dspy
 
 logger = get_logger(__name__)
 
@@ -14,19 +15,29 @@ async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     setup_logging()
 
+    # Initialize DSPy LM
+    try:
+        lm = dspy.LM(
+            model="openrouter/google/gemini-2.5-pro", max_tokens=settings.llm_max_tokens
+        )
+        dspy.settings.configure(lm=lm)
+        logger.info("DSPy LM configured successfully")
+    except Exception as e:
+        logger.error(f"Failed to configure DSPy LM: {e}", exc_info=True)
+        raise
+
     # Test critical dependencies
+    # TODO: better handling on fail
     try:
         from app.dependencies.database import get_connection_pool
         from app.dependencies.cache import get_redis_client
 
-        # Test database
         pool = get_connection_pool()
         await pool.open()
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("SELECT 1")
 
-        # Test Redis
         redis_client = get_redis_client()
         await redis_client.ping()
 
@@ -38,10 +49,7 @@ async def lifespan(app: FastAPI):
     yield
     await close_redis_client()
 
-    # Close database connection pool
     try:
-        from app.dependencies.database import get_connection_pool
-
         pool = get_connection_pool()
         await pool.close()
         logger.info("Database connection pool closed")

@@ -1,5 +1,5 @@
-from app.services.rag.service import RAGService
-from app.services.cache import RedisChatMessageHistory
+from app.retrieval import RAGService
+from .cache import ChatCache
 from app.models.chat import ChatMessage
 from app.models.rag import RAGResult
 from app.core.config import settings
@@ -11,11 +11,9 @@ logger = get_logger(__name__)
 class ChatService:
     """Service that handles the common chat flow used by both REST and WebSocket."""
 
-    def __init__(
-        self, rag_service: RAGService, history_manager: RedisChatMessageHistory
-    ):
+    def __init__(self, rag_service: RAGService, cache: ChatCache):
         self.rag_service = rag_service
-        self.history_manager = history_manager
+        self.cache = cache
 
     async def process_message(self, message: str, session_id: str) -> RAGResult:
         """Process a chat message through the full pipeline."""
@@ -24,7 +22,7 @@ class ChatService:
         )
 
         # 1. Get chat history
-        messages = await self.history_manager.get_messages(
+        messages = await self.cache.get_messages(
             session_id, limit=settings.chat_history_limit
         )
         formatted_history = "\n".join(
@@ -39,12 +37,12 @@ class ChatService:
         )
 
         # 3. Save user message
-        await self.history_manager.add_message(
+        await self.cache.add_message(
             session_id, ChatMessage(role="user", content=message)
         )
 
         # 4. Save assistant response
-        await self.history_manager.add_message(
+        await self.cache.add_message(
             session_id,
             ChatMessage(
                 role="assistant",
